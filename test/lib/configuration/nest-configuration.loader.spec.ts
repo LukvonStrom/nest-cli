@@ -33,6 +33,15 @@ describe('Nest Configuration Loader', () => {
       language: 'ts',
       collection: '@nestjs/schematics',
       sourceRoot: 'src',
+      entryFile: 'main',
+      monorepo: false,
+      projects: {},
+      compilerOptions: {
+        plugins: [],
+        tsConfigPath: 'tsconfig.build.json',
+        webpack: false,
+        webpackConfigPath: 'webpack.config.js',
+      },
     });
   });
 });

@@ -1,6 +1,6 @@
 import * as ora from 'ora';
 import { AbstractPackageManager, ProjectDependency } from '../package-managers';
-import { messages } from '../ui';
+import { MESSAGES } from '../ui';
 
 export class NestDependencyManager {
   constructor(private packageManager: AbstractPackageManager) {}
@@ -12,21 +12,18 @@ export class NestDependencyManager {
       .map(dependency => dependency.name);
   }
 
-  public async update(force: boolean, tag: string) {
+  public async update(force: boolean, tag: string = 'latest') {
     const spinner = ora({
       spinner: {
         interval: 120,
         frames: ['▹▹▹▹▹', '▸▹▹▹▹', '▹▸▹▹▹', '▹▹▸▹▹', '▹▹▹▸▹', '▹▹▹▹▸'],
       },
-      text: messages.PACKAGE_MANAGER_UPDATE_IN_PROGRESS,
+      text: MESSAGES.PACKAGE_MANAGER_UPDATE_IN_PROGRESS,
     });
     spinner.start();
     const dependencies: string[] = await this.read();
     if (force) {
-      await this.packageManager.upgradeProduction(
-        dependencies,
-        tag !== undefined ? tag : 'latest',
-      );
+      await this.packageManager.upgradeProduction(dependencies, tag);
     } else {
       await this.packageManager.updateProduction(dependencies);
     }

@@ -1,15 +1,27 @@
 import { dasherize } from '@angular-devkit/core/src/utils/strings';
 import chalk from 'chalk';
 import { execSync } from 'child_process';
+import * as fs from 'fs';
 import * as inquirer from 'inquirer';
 import { Answers, Question } from 'inquirer';
 import { join } from 'path';
+import { promisify } from 'util';
 import { Input } from '../commands';
-import { AbstractPackageManager, PackageManager, PackageManagerFactory } from '../lib/package-managers';
+import { defaultGitIgnore } from '../lib/configuration/defaults';
+import {
+  AbstractPackageManager,
+  PackageManager,
+  PackageManagerFactory,
+} from '../lib/package-managers';
 import { generateInput, generateSelect } from '../lib/questions/questions';
 import { GitRunner } from '../lib/runners/git.runner';
-import { AbstractCollection, Collection, CollectionFactory, SchematicOption } from '../lib/schematics';
-import { emojis, messages } from '../lib/ui';
+import {
+  AbstractCollection,
+  Collection,
+  CollectionFactory,
+  SchematicOption,
+} from '../lib/schematics';
+import { EMOJIS, MESSAGES } from '../lib/ui';
 import { AbstractAction } from './abstract.action';
 
 export class NewAction extends AbstractAction {
@@ -23,6 +35,9 @@ export class NewAction extends AbstractAction {
     const shouldSkipInstall = options.some(
       option => option.name === 'skip-install' && option.value === true,
     );
+    const shouldSkipGit = options.some(
+      option => option.name === 'skip-git' && option.value === true,
+    );
     const projectDirectory = dasherize(getApplicationNameInput(inputs)!
       .value as string);
 
@@ -34,7 +49,11 @@ export class NewAction extends AbstractAction {
       );
     }
     if (!isDryRunEnabled) {
-      await initializeGitRepository(projectDirectory);
+      if (!shouldSkipGit) {
+        await initializeGitRepository(projectDirectory);
+        await createGitIgnoreFile(projectDirectory);
+      }
+
       printCollective();
     }
   }
@@ -44,7 +63,7 @@ const getApplicationNameInput = (inputs: Input[]) =>
   inputs.find(input => input.name === 'name');
 
 const askForMissingInformation = async (inputs: Input[]) => {
-  console.info(messages.PROJECT_INFORMATION_START);
+  console.info(MESSAGES.PROJECT_INFORMATION_START);
   console.info();
 
   const prompt: inquirer.PromptModule = inquirer.createPromptModule();
@@ -69,9 +88,11 @@ const replaceInputMissingInformation = (
 };
 
 const generateApplicationFiles = async (args: Input[], options: Input[]) => {
-  const collectionName = (options.find(option => option.name === 'collection' && option.value != null)).value;
+  const collectionName = options.find(
+    option => option.name === 'collection' && option.value != null,
+  )!.value;
   const collection: AbstractCollection = CollectionFactory.create(
-    collectionName || Collection.NESTJS,
+    (collectionName as Collection) || Collection.NESTJS,
   );
   const schematicOptions: SchematicOption[] = mapSchematicOptions(
     args.concat(options),
@@ -107,7 +128,7 @@ const installPackages = async (
   let packageManager: AbstractPackageManager;
   if (dryRunMode) {
     console.info();
-    console.info(chalk.green(messages.DRY_RUN_MODE));
+    console.info(chalk.green(MESSAGES.DRY_RUN_MODE));
     console.info();
     return;
   }
@@ -136,7 +157,7 @@ const selectPackageManager = async (): Promise<AbstractPackageManager> => {
 
 const askForPackageManager = async (): Promise<Answers> => {
   const questions: Question[] = [
-    generateSelect('package-manager')(messages.PACKAGE_MANAGER_QUESTION)([
+    generateSelect('package-manager')(MESSAGES.PACKAGE_MANAGER_QUESTION)([
       PackageManager.NPM,
       PackageManager.YARN,
     ]),
@@ -148,8 +169,24 @@ const askForPackageManager = async (): Promise<Answers> => {
 const initializeGitRepository = async (dir: string) => {
   const runner = new GitRunner();
   await runner.run('init', true, join(process.cwd(), dir)).catch(() => {
-    console.error(chalk.red(messages.GIT_INITIALIZATION_ERROR));
+    console.error(chalk.red(MESSAGES.GIT_INITIALIZATION_ERROR));
   });
+};
+
+/**
+ * Write a file `.gitignore` in the root of the newly created project.
+ * `.gitignore` available in `@nestjs/schematics` cannot be published to
+ * NPM (needs to be investigated).
+ *
+ * @param dir Relative path to the project.
+ * @param content (optional) Content written in the `.gitignore`.
+ *
+ * @return Resolves when succeeds, or rejects with any error from `fn.writeFile`.
+ */
+const createGitIgnoreFile = (dir: string, content?: string) => {
+  const fileContent = content || defaultGitIgnore;
+  const filePath = join(process.cwd(), dir, '.gitignore');
+  return promisify(fs.writeFile)(filePath, fileContent);
 };
 
 const printCollective = () => {
@@ -158,13 +195,13 @@ const printCollective = () => {
   const emptyLine = print();
 
   emptyLine();
-  yellow(`Thanks for installing Nest ${emojis.PRAY}`);
+  yellow(`Thanks for installing Nest ${EMOJIS.PRAY}`);
   dim('Please consider donating to our open collective');
   dim('to help us maintain this package.');
   emptyLine();
   emptyLine();
   print()(
-    `${chalk.bold(`${emojis.WINE}  Donate:`)} ${chalk.underline(
+    `${chalk.bold(`${EMOJIS.WINE}  Donate:`)} ${chalk.underline(
       'https://opencollective.com/nest',
     )}`,
   );
